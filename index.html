@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#F1F0EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131416" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-title" content="Abuela">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="icon-192.png">
+<title>Medicinas de Abuela</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Lexend:wght@400;500;600&display=swap">
+<style>
+/* Same pill-organizer world as Sofi's chart: each time of day is a compartment with a colored lid,
+   each medicine a row ticked with the thumb. Appointments sit on top as calendar cards. */
+:root{
+  color-scheme:light;
+  --bg:#F1F0EC; --surface:#FFFFFF; --tray:#E6E4DE; --ink:#1E2124; --muted:#585D62; --line:#D9D6CE;
+  --done:#2B7A57; --done-soft:#DDF0E6; --warn:#A8322A; --warn-soft:#F8E3E0; --note:#F6EBCB; --note-ink:#5A4300;
+  --lid-am:#FFE28F;  --lid-am-ink:#4F3B00;
+  --lid-mid:#C3E9D4; --lid-mid-ink:#124A31;
+  --lid-pm:#CCD5F3;  --lid-pm-ink:#1E2D68;
+  --appt:#F3DCEB; --appt-ink:#6B1F4E;
+  --f-display:"Fredoka","Nunito","Arial Rounded MT Bold",system-ui,sans-serif;
+  --f-body:"Lexend","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#131416; --surface:#1D1F22; --tray:#26282C; --ink:#ECEDEE; --muted:#A7ABB0; --line:#34373B;
+  --done:#5CC08F; --done-soft:#17352A; --warn:#F08A80; --warn-soft:#3A1E1B; --note:#3A3016; --note-ink:#F5DE9A;
+  --lid-am:#4A3C10;  --lid-am-ink:#FFE28F;
+  --lid-mid:#1D4433; --lid-mid-ink:#C3E9D4;
+  --lid-pm:#27315A;  --lid-pm-ink:#CCD5F3;
+  --appt:#45213A; --appt-ink:#F6C6E3;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#131416; --surface:#1D1F22; --tray:#26282C; --ink:#ECEDEE; --muted:#A7ABB0; --line:#34373B;
+  --done:#5CC08F; --done-soft:#17352A; --warn:#F08A80; --warn-soft:#3A1E1B; --note:#3A3016; --note-ink:#F5DE9A;
+  --lid-am:#4A3C10;  --lid-am-ink:#FFE28F;
+  --lid-mid:#1D4433; --lid-mid-ink:#C3E9D4;
+  --lid-pm:#27315A;  --lid-pm-ink:#CCD5F3;
+  --appt:#45213A; --appt-ink:#F6C6E3;
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--done);outline-offset:2px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:520px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 56px;display:flex;flex-direction:column;gap:16px}
+
+/* top */
+.top{display:grid;grid-template-columns:1fr auto;gap:10px 12px;align-items:start}
+h1{font-family:var(--f-display);font-weight:600;font-size:29px;line-height:1.05;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{margin:4px 0 0;font-size:14px;color:var(--muted)}
+.lang{display:flex;background:var(--tray);border-radius:999px;padding:3px}
+.lang button{border:0;background:transparent;font-size:13px;font-weight:600;min-width:40px;height:34px;border-radius:999px;color:var(--muted);cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.sync{grid-column:1/-1;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.sync[data-state="live"] i{background:var(--done)}
+.sync[data-state="local"] i,.sync[data-state="fail"] i{background:#C98A1B}
+
+/* appointments */
+.appts{background:var(--surface);border-radius:22px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.appts-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+h2{font-family:var(--f-display);font-weight:600;font-size:20px;margin:0;line-height:1.15}
+.add{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 16px 0 12px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-size:14px;font-weight:600;cursor:pointer;flex:none}
+.add svg{width:18px;height:18px}
+.appt{display:grid;grid-template-columns:58px 1fr;gap:12px;align-items:start;width:100%;border:0;border-radius:16px;background:var(--appt);color:var(--appt-ink);padding:10px 12px 10px 10px;text-align:left;cursor:pointer}
+.cal{background:var(--surface);color:var(--ink);border-radius:12px;text-align:center;padding:5px 0 6px;line-height:1}
+.cal .mo{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--appt-ink)}
+.cal .dd{display:block;font-family:var(--f-display);font-weight:600;font-size:24px;margin-top:3px}
+.cal .wd{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+.appt .tt{font-weight:600;font-size:16px;line-height:1.25;color:var(--ink)}
+.appt .meta{font-size:14px;margin-top:2px}
+.appt .when{font-size:13px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}
+.appt .nt{font-size:13px;margin-top:4px;color:var(--ink);opacity:.85}
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--note);color:var(--note-ink);margin-top:6px;margin-right:4px}
+.badge.miss{background:var(--surface);color:var(--muted);border:1px dashed var(--line)}
+.appt.past{background:var(--tray);color:var(--muted)}
+.appt.past .cal .mo{color:var(--muted)}
+.nextappt{grid-column:1/-1;display:flex;align-items:center;gap:10px;width:100%;min-height:52px;border:0;border-radius:16px;background:var(--appt);color:var(--appt-ink);padding:8px 14px;text-align:left;font-size:14px;cursor:pointer}
+.nextappt b{font-weight:600;color:var(--ink)}
+.nextappt svg{width:20px;height:20px;flex:none}
+.nextappt span{flex:1;min-width:0}
+.appts{scroll-margin-top:16px}
+.none{margin:0;font-size:14px;color:var(--muted)}
+.linkbtn{align-self:flex-start;border:0;background:none;padding:6px 2px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.pastlist{display:flex;flex-direction:column;gap:8px}
+
+/* sticky day bar */
+.daybar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);margin-inline:-4px;padding:8px 4px 10px;display:grid;grid-template-columns:48px 1fr 48px;align-items:center;gap:8px;border-bottom:1px solid transparent;transition:border-color .2s}
+.daybar.stuck{border-bottom-color:var(--line)}
+.arrow{width:48px;height:48px;border-radius:16px;border:0;background:var(--surface);display:grid;place-items:center;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.arrow svg{width:22px;height:22px}
+.arrow:disabled{opacity:.3;cursor:default}
+.dayhead{text-align:center;min-width:0}
+.dayhead .d{font-family:var(--f-display);font-weight:600;font-size:22px;line-height:1.15}
+.dayhead .n{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.strip{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 6px;margin-inline:-2px;scroll-snap-type:x proximity;scrollbar-width:none}
+.strip::-webkit-scrollbar{display:none}
+.chip{flex:0 0 46px;scroll-snap-align:center;border:0;border-radius:14px;background:var(--surface);padding:7px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative}
+.chip .wd{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.chip .dn{font-family:var(--f-display);font-weight:600;font-size:17px;line-height:1}
+.chip .bar{height:4px;width:30px;border-radius:2px;background:var(--line);overflow:hidden}
+.chip .bar b{display:block;height:100%;background:var(--done)}
+.chip .ap{position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--appt-ink)}
+.chip.today .wd{color:var(--done)}
+.chip[aria-current="date"]{background:var(--ink);color:var(--bg)}
+.chip[aria-current="date"] .wd{color:var(--bg);opacity:.8}
+.chip[aria-current="date"] .bar{background:color-mix(in srgb,var(--bg) 35%,transparent)}
+.chip[aria-current="date"] .bar b{background:var(--bg)}
+.chip[aria-current="date"] .ap{background:var(--bg)}
+.todaybtn{justify-self:center;align-self:center;border:0;background:var(--surface);border-radius:999px;padding:8px 16px;font-size:14px;font-weight:600;color:var(--done);cursor:pointer}
+
+.dayappts{display:flex;flex-direction:column;gap:8px}
+.notice{background:var(--note);color:var(--note-ink);border-radius:16px;padding:12px 14px;font-size:14px}
+.alldone{display:flex;align-items:center;gap:10px;background:var(--done-soft);color:var(--done);border-radius:16px;padding:12px 14px;font-weight:600;font-size:15px}
+.alldone svg{width:22px;height:22px;flex:none}
+
+/* compartments */
+#slots{display:flex;flex-direction:column;gap:14px}
+.comp{border-radius:22px;background:var(--tray);padding:5px;scroll-margin-top:90px}
+.lid{display:flex;align-items:center;gap:10px;background:var(--lid);color:var(--lid-ink);border-radius:18px 18px 8px 8px;padding:10px 10px 10px 14px;min-height:60px}
+.lid .nm{font-family:var(--f-display);font-weight:600;font-size:19px;line-height:1.1}
+.lid .tm{font-size:13px;font-weight:500;opacity:.85;font-variant-numeric:tabular-nums}
+.lid .st{margin-left:auto;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lid .st.due{background:var(--lid-ink);color:var(--lid);border-radius:999px;padding:3px 10px}
+.lid .all{flex:none;height:40px;padding:0 14px;border:0;border-radius:999px;background:var(--lid-ink);color:var(--lid);font-size:13px;font-weight:600;cursor:pointer}
+.rows{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.dose{display:grid;grid-template-columns:24px 1fr 44px;gap:12px;align-items:center;width:100%;min-height:68px;padding:11px 12px 11px 14px;border:0;border-radius:14px;background:var(--surface);text-align:left;cursor:pointer;transition:background .2s}
+.rows .dose:last-child{border-radius:14px 14px 18px 18px}
+.pill{width:22px;height:22px;background:var(--lid-ink);opacity:.8;border-radius:50%;justify-self:center;position:relative}
+.pill.cap{width:14px;height:26px;border-radius:7px;background:linear-gradient(var(--lid-ink) 50%,color-mix(in srgb,var(--lid-ink) 40%,var(--surface)) 50%)}
+.pill.tab::after{content:"";position:absolute;left:4px;right:4px;top:50%;height:2px;margin-top:-1px;background:color-mix(in srgb,var(--surface) 55%,transparent);border-radius:1px}
+.pill.sub{width:24px;height:16px;border-radius:8px}
+.pill.drop{width:18px;height:18px;border-radius:50% 0 50% 50%;transform:rotate(-45deg);margin-top:4px}
+.body{min-width:0;display:flex;flex-direction:column;gap:1px}
+.mn{font-weight:600;font-size:16px;line-height:1.25}
+.amt{font-size:14px}
+.why{font-size:13px;color:var(--muted)}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.tag{font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px;background:var(--note);color:var(--note-ink)}
+.given{font-size:13px;font-weight:600;color:var(--done);margin-top:2px}
+.undo{font-size:13px;font-weight:600;color:var(--warn);margin-top:2px}
+.check{width:44px;height:44px;border-radius:50%;border:2.5px solid var(--line);display:grid;place-items:center;transition:background .18s,border-color .18s,transform .18s cubic-bezier(.2,.9,.3,1.4)}
+.check svg{width:22px;height:22px;opacity:0;transform:scale(.6);transition:opacity .15s,transform .2s cubic-bezier(.2,.9,.3,1.4)}
+.dose[aria-checked="true"]{background:color-mix(in srgb,var(--surface) 70%,var(--done-soft))}
+.dose[aria-checked="true"] .check{background:var(--done);border-color:var(--done);transform:scale(1.04)}
+.dose[aria-checked="true"] .check svg{opacity:1;transform:none}
+.dose[aria-checked="true"] .mn,.dose[aria-checked="true"] .amt{color:var(--muted)}
+.dose[aria-checked="true"] .mn{text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:color-mix(in srgb,var(--done) 60%,transparent)}
+.dose[aria-checked="true"] .why,.dose[aria-checked="true"] .tags{display:none}
+.dose.arm .check{background:var(--warn-soft);border-color:var(--warn)}
+
+/* as-needed */
+.prn{background:var(--surface);border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.prn .why{font-size:14px}
+.prn .last{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.prn .log{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.prn .log li{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--tray);border-radius:12px;padding:6px 6px 6px 12px;font-size:14px;font-variant-numeric:tabular-nums}
+.prn .log button{border:0;background:var(--surface);border-radius:999px;height:36px;padding:0 12px;font-size:13px;font-weight:600;color:var(--warn);cursor:pointer}
+.prn .give{height:52px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-size:16px;font-weight:600;cursor:pointer}
+.prn .small{font-size:13px;color:var(--muted);margin:0}
+.err{color:var(--warn);font-size:14px;margin:0}
+
+/* reminders */
+.remind{grid-column:1/-1}
+.remind:empty{display:none}
+.remind .rb{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px 0 14px;border:0;border-radius:999px;background:var(--surface);color:var(--ink);font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.remind .rb:disabled{opacity:.6;cursor:default}
+.remind svg{width:18px;height:18px;flex:none;color:var(--done)}
+.remind .st{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.remind .st b{color:var(--done);font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.remind .st button{border:0;background:none;padding:4px 2px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
+/* sheets */
+.sheet-bg{position:fixed;inset:0;z-index:20;background:rgba(10,12,14,.4);display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:520px;max-height:92vh;overflow-y:auto;background:var(--surface);border-radius:26px 26px 0 0;display:flex;flex-direction:column;gap:12px;
+  padding:22px max(20px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px));
+  box-shadow:0 -10px 32px rgba(0,0,0,.18);animation:sheet-up .3s cubic-bezier(.2,.9,.3,1)}
+.sheet h2{font-size:23px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label,.field .lb{font-size:14px;font-weight:600}
+.field .opt{font-weight:400;color:var(--muted)}
+.sheet input[type=text],.sheet input[type=date],.sheet input[type=time],.sheet textarea{width:100%;min-height:52px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink);font-size:17px;padding:10px 14px;caret-color:var(--done);-webkit-appearance:none;appearance:none}
+.sheet textarea{min-height:76px;resize:vertical}
+.sheet input:focus,.sheet textarea:focus{outline:none;border-color:var(--done)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two .field{min-width:0}
+.tick{display:flex;align-items:center;gap:12px;min-height:52px;border-radius:14px;background:var(--bg);padding:0 14px;font-size:16px;cursor:pointer}
+.tick input{width:22px;height:22px;accent-color:var(--done)}
+.sheet .go{height:54px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:600;font-size:16px;cursor:pointer}
+.sheet .go:disabled{opacity:.35;cursor:default}
+.sheet .later{align-self:center;border:0;background:none;color:var(--muted);font-size:15px;cursor:pointer;padding:8px}
+.sheet .del{align-self:center;border:0;background:none;color:var(--warn);font-size:15px;font-weight:600;cursor:pointer;padding:8px}
+.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px;font-size:15px}
+@keyframes sheet-up{from{transform:translateY(100%)}to{transform:none}}
+
+@media (hover:hover){ .dose:hover{background:color-mix(in srgb,var(--surface) 88%,var(--ink))} .chip:hover{outline:1.5px solid var(--line)} .appt:hover{filter:brightness(.97)} }
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} .sheet{animation:none} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1 id="h1">Medicinas de Abuela</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+    <div class="lang" role="group" aria-label="Idioma">
+      <button id="lang-es" type="button" aria-pressed="true">ES</button>
+      <button id="lang-en" type="button" aria-pressed="false">EN</button>
+    </div>
+    <div class="sync" id="sync" data-state="wait"><i></i><span id="synctext"></span></div>
+    <div class="remind" id="remind"></div>
+    <button class="nextappt" id="nextappt" type="button" hidden></button>
+  </header>
+
+
+  <div class="daybar" id="daybar">
+    <button class="arrow" id="prev" type="button"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="dayhead"><div class="d" id="dlabel"></div><div class="n" id="dnote"></div></div>
+    <button class="arrow" id="next" type="button"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+  <div class="strip" id="strip"></div>
+  <button class="todaybtn" id="todaybtn" type="button" hidden></button>
+
+  <div class="dayappts" id="dayappts"></div>
+  <div id="slots"></div>
+  <p class="err" id="err" role="alert" hidden></p>
+
+  <section class="appts" aria-labelledby="appts-h">
+    <div class="appts-h"><h2 id="appts-h"></h2><button class="add" id="addappt" type="button"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span id="addappt-t"></span></button></div>
+    <div id="upcoming" class="pastlist"></div>
+    <button class="linkbtn" id="pasttoggle" type="button" hidden></button>
+    <div id="pastlist" class="pastlist" hidden></div>
+  </section>
+
+  <section class="prn" id="prn" aria-labelledby="prn-h"></section>
+</div>
+
+<div class="sheet-bg" id="apptbg" hidden>
+  <form class="sheet" id="apptform" role="dialog" aria-modal="true" aria-labelledby="af-h" novalidate>
+    <h2 id="af-h"></h2>
+    <div class="field"><label for="af-title" id="af-title-l"></label><input id="af-title" type="text" maxlength="80" autocapitalize="sentences" enterkeyhint="next"></div>
+    <div class="two">
+      <div class="field"><label for="af-date" id="af-date-l"></label><input id="af-date" type="date" required></div>
+      <div class="field"><label for="af-time" id="af-time-l"></label><input id="af-time" type="time"></div>
+    </div>
+    <div class="field"><label for="af-place" id="af-place-l"></label><input id="af-place" type="text" maxlength="100" autocapitalize="words" enterkeyhint="next"></div>
+    <div class="field"><label for="af-note" id="af-note-l"></label><textarea id="af-note" maxlength="300" autocapitalize="sentences"></textarea></div>
+    <label class="tick"><input id="af-fast" type="checkbox"><span id="af-fast-l"></span></label>
+    <p class="err" id="af-err" role="alert" hidden></p>
+    <button class="go" id="af-go" type="submit" disabled></button>
+    <button class="del" id="af-del" type="button" hidden></button>
+    <button class="later" id="af-cancel" type="button"></button>
+  </form>
+</div>
+<div class="sheet-bg" id="iosbg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ios-h">
+    <h2 id="ios-h"></h2>
+    <ol class="steps" id="ios-steps"></ol>
+    <button class="go" type="button" id="ios-ok"></button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// Public web config: it identifies the project; the database rules decide what can be written.
+var FIREBASE_CONFIG = {"apiKey": "AIzaSyCR2KlFTtTimUOFARtCBY6J5KOwd9WGLrs", "authDomain": "sofi-meds.firebaseapp.com", "projectId": "sofi-meds", "storageBucket": "sofi-meds.firebasestorage.app", "messagingSenderId": "743421915830", "appId": "1:743421915830:web:ec983ad86385d96fe76c17"};
+(function(){
+  var START = new Date(2026,10,7); // first day on the chart
+  var AHEAD = 14;                   // days you can look ahead
+  var SLOTS = ["am","mid","pm"];
+  var SLOT_MIN = {am:480, mid:840, pm:1200}; // 8:00 AM, 2:00 PM, 8:00 PM
+  // Same every day, from grandma's medicine list. Keep in sync with functions/abuela.js.
+  var DAY = {
+    am:["furo","omep","meto","hydr","b12","isos","rosu","allo","brim"],
+    mid:["hydr"],
+    pm:["meto","hydr","b12","alpr","brim","lata"]
+  };
+  var MEDS = {
+    furo:{es:"Furosemida 40 mg",en:"Furosemide 40 mg",form:"tab",why:["Retención de líquidos","Fluid retention"],f:1},
+    omep:{es:"Omeprazol 20 mg",en:"Omeprazole 20 mg",form:"cap",why:["Gastritis","Gastritis"],f:1},
+    meto:{es:"Metoprolol 50 mg",en:"Metoprolol 50 mg",form:"tab",why:["Presión","Blood pressure"],f:2},
+    hydr:{es:"Hidralazina 25 mg",en:"Hydralazine 25 mg",form:"tab",why:["Presión","Blood pressure"],f:3},
+    b12:{es:"Vitamina B12 1,000 mcg",en:"Vitamin B12 1,000 mcg",form:"sub",why:["Anemia","Anemia"],f:2,tags:["tongue"]},
+    isos:{es:"Isosorbida mono 60 mg",en:"Isosorbide mono 60 mg",form:"tab",why:["Presión","Blood pressure"],f:1,tags:["afterFood"]},
+    rosu:{es:"Rosuvastatina 10 mg",en:"Rosuvastatin 10 mg",form:"tab",why:["Colesterol","Cholesterol"],f:1},
+    allo:{es:"Alopurinol 100 mg",en:"Allopurinol 100 mg",form:"tab",why:["Ácido úrico","Uric acid"],f:1},
+    alpr:{es:"Alprazolam 0.25 mg",en:"Alprazolam 0.25 mg",form:"tab",why:["Nervios","Nerves"],f:1},
+    brim:{es:"Brimonidina (gotas)",en:"Brimonidine (eye drops)",form:"drop",why:["Gotas para los ojos","Eye drops"],f:2},
+    lata:{es:"Latanoprost (gotas)",en:"Latanoprost (eye drops)",form:"drop",why:["Gotas para los ojos","Eye drops"],f:1,tags:["dropsGap"]}
+  };
+  var T = {
+    es:{h1:"Medicinas de Abuela",sub:"Toca cada medicina después de dársela.",
+      live:"Guardado en línea: se ve igual en cualquier teléfono",local:"Guardado solo en este teléfono",wait:"Conectando…",fail:"No se pudo conectar. Lo que marques se guarda en este teléfono.",
+      appts:"Citas",nextAppt:"Próxima cita",add:"Agregar",noAppts:"No hay citas próximas.",pastShow:"Ver citas pasadas",pastHide:"Ocultar citas pasadas",
+      fasting:"En ayunas",noTime:"Falta la hora",today:"Hoy",tomorrow:"Mañana",inDays:"En {n} días",ago:"Pasada",
+      apptToday:"Cita hoy",fastNote:"Va en ayunas. Pregunta si las medicinas de la mañana se le dan antes o después.",
+      newAppt:"Nueva cita",editAppt:"Editar cita",fTitle:"¿Qué es?",fTitlePh:"ej. Doctora de los riñones",fDate:"Fecha",fTime:"Hora",opt:"(opcional)",
+      fPlace:"Dónde",fPlacePh:"ej. Hospital de Rio Grande City",fNote:"Notas",fNotePh:"ej. Llevar la lista de medicinas",fFast:"Va en ayunas",
+      saveAppt:"Guardar cita",cancel:"Cancelar",del:"Borrar cita",delSure:"Toca otra vez para borrar",apptErr:"No se guardó. Revisa la conexión e inténtalo otra vez.",
+      goToday:"Ir a hoy",prev:"Día anterior",next:"Día siguiente",given:"Dada a las",undo:"Toca otra vez para deshacer",
+      slots:{am:"Mañana",mid:"Tarde",pm:"Noche"},times:{am:"8:00 AM",mid:"2:00 PM",pm:"8:00 PM"},
+      due:"Ya toca",done:"Listo",all:"Marcar todas",gave:"dadas",of:"de",
+      tongue:"Debajo de la lengua",afterFood:"Después de comer",dropsGap:"Esperar 5 min entre gotas",
+      freq:{1:"1 vez al día",2:"2 veces al día",3:"3 veces al día"},
+      alldone:"Ya se dieron todas las medicinas de este día.",saveErr:"No se guardó esa marca. Tócala otra vez.",
+      prnH:"Tramadol/APAP",prnWhy:"Para dolores musculares · solo cuando lo necesite",prnGive:"Anotar que le di una ahora",
+      prnLast:"Última vez",prnNever:"Todavía no se ha anotado ninguna.",prnToday:"Hoy",prnTimes:"{n} vez|{n} veces",prnRemove:"Quitar",prnSure:"¿Quitar?",
+      prnNote:"Sigue la receta para cuántas puede tomar al día.",
+      remindOff:"Recibir recordatorios en este teléfono",remindOn:"Recordatorios activados",remindTurnOff:"Desactivar",remindWorking:"Activando…",
+      remindBlocked:"Las notificaciones están bloqueadas. Actívalas en los ajustes del teléfono para recibir recordatorios.",
+      remindNo:"Este navegador no puede mostrar recordatorios. Usa Safari en iPhone o Chrome en Android.",remindFail:"No se pudieron activar los recordatorios. Inténtalo otra vez.",
+      iosH:"Primero, agrega la página a tu pantalla de inicio",iosSteps:["En Safari, toca el botón Compartir (el cuadro con una flecha).","Elige “Agregar a inicio” y toca Agregar.","Abre Abuela desde tu pantalla de inicio y toca “Recibir recordatorios” otra vez."],iosOk:"Entendido",
+      weekdays:["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"],
+      mon:["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"],
+      months:["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"],
+      longday:["domingo","lunes","martes","miércoles","jueves","viernes","sábado"]},
+    en:{h1:"Grandma's medicines",sub:"Tap each medicine after you give it.",
+      live:"Saved online: looks the same on any phone",local:"Saved on this phone only",wait:"Connecting…",fail:"Couldn't connect. Your taps still save on this phone.",
+      appts:"Appointments",nextAppt:"Next appointment",add:"Add",noAppts:"No upcoming appointments.",pastShow:"Show past appointments",pastHide:"Hide past appointments",
+      fasting:"Fasting",noTime:"Time missing",today:"Today",tomorrow:"Tomorrow",inDays:"In {n} days",ago:"Past",
+      apptToday:"Appointment today",fastNote:"She goes fasting. Ask whether to give the morning medicines before or after.",
+      newAppt:"New appointment",editAppt:"Edit appointment",fTitle:"What is it?",fTitlePh:"e.g. Kidney doctor",fDate:"Date",fTime:"Time",opt:"(optional)",
+      fPlace:"Where",fPlacePh:"e.g. Rio Grande City hospital",fNote:"Notes",fNotePh:"e.g. Bring the medicine list",fFast:"She goes fasting",
+      saveAppt:"Save appointment",cancel:"Cancel",del:"Delete appointment",delSure:"Tap again to delete",apptErr:"It didn't save. Check the connection and try again.",
+      goToday:"Go to today",prev:"Previous day",next:"Next day",given:"Given at",undo:"Tap again to undo",
+      slots:{am:"Morning",mid:"Afternoon",pm:"Night"},times:{am:"8:00 AM",mid:"2:00 PM",pm:"8:00 PM"},
+      due:"Due now",done:"Done",all:"Mark all",gave:"given",of:"of",
+      tongue:"Under the tongue",afterFood:"After eating",dropsGap:"Wait 5 min between drops",
+      freq:{1:"Once a day",2:"Twice a day",3:"3 times a day"},
+      alldone:"Every medicine is given for this day.",saveErr:"That check didn't save. Tap it again.",
+      prnH:"Tramadol/APAP",prnWhy:"For muscle pain · only when she needs it",prnGive:"Log one given now",
+      prnLast:"Last one",prnNever:"None logged yet.",prnToday:"Today",prnTimes:"{n} time|{n} times",prnRemove:"Remove",prnSure:"Remove?",
+      prnNote:"Follow the prescription for how many she can take a day.",
+      remindOff:"Get reminders on this phone",remindOn:"Reminders on",remindTurnOff:"Turn off",remindWorking:"Turning on…",
+      remindBlocked:"Notifications are blocked. Allow them in the phone's settings to get reminders.",
+      remindNo:"This browser can't show reminders. Use Safari on iPhone or Chrome on Android.",remindFail:"Couldn't turn on reminders. Try again.",
+      iosH:"First, add the page to your Home Screen",iosSteps:["In Safari, tap the Share button (the square with an arrow).","Choose “Add to Home Screen”, then tap Add.","Open Abuela from your Home Screen and tap “Get reminders” again."],iosOk:"Got it",
+      weekdays:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
+      mon:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+      months:["January","February","March","April","May","June","July","August","September","October","November","December"],
+      longday:["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]}
+  };
+
+  function dateOf(i){ return new Date(START.getFullYear(),START.getMonth(),START.getDate()+i); }
+  function keyOfDate(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+  function key(i){ return keyOfDate(dateOf(i)); }
+  function parseKey(k){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(k||""); return m ? new Date(+m[1],+m[2]-1,+m[3]) : null; }
+  function indexOfKey(k){ var d=parseKey(k); return d ? Math.round((d-START)/86400000) : NaN; }
+  function doseId(i,slot,med){ return key(i)+"_"+slot+"_"+med; }
+  function idsFor(i){ var out=[]; SLOTS.forEach(function(sl){ DAY[sl].forEach(function(m){ out.push(doseId(i,sl,m)); }); }); return out; }
+  function todayIndex(){ var n=new Date(); return Math.round((new Date(n.getFullYear(),n.getMonth(),n.getDate())-START)/86400000); }
+  function nthOfDay(m, slot){ var n=0; for (var k=0;k<=SLOTS.indexOf(slot);k++) if (DAY[SLOTS[k]].indexOf(m)>=0) n++; return n; }
+
+  var lang = "es";
+  try { var sv = localStorage.getItem("abuela-lang"); if (sv==="es"||sv==="en") lang = sv; } catch(e){}
+  var ti = todayIndex(), LAST = Math.max(ti,0)+AHEAD, FIRST = Math.max(0, ti-14); // two weeks back
+  var cur = Math.max(ti,0);
+  var checks = {}, appts = {}, prn = {};
+  var mode = "wait", db = null, armed = null, armTimer = null, didScroll = false, showPast = false;
+  var editing = null, delArmed = false, prnArmed = null;
+
+  function loadLocal(){ try { checks = JSON.parse(localStorage.getItem("abuela-checks")||"{}")||{}; appts = JSON.parse(localStorage.getItem("abuela-appts")||"{}")||{}; prn = JSON.parse(localStorage.getItem("abuela-prn")||"{}")||{}; } catch(e){} }
+  function saveLocal(){ try { localStorage.setItem("abuela-checks",JSON.stringify(checks)); localStorage.setItem("abuela-appts",JSON.stringify(appts)); localStorage.setItem("abuela-prn",JSON.stringify(prn)); } catch(e){} }
+
+  var $ = function(id){ return document.getElementById(id); };
+  var CAL = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3" stroke="currentColor" stroke-width="2"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  var CHECK = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.2 4L19 7" stroke="var(--surface)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function loc(){ return lang==="es"?"es-MX":"en-US"; }
+  function fmtTime(iso){ try { return new Date(iso).toLocaleTimeString(loc(),{hour:"numeric",minute:"2-digit"}); } catch(e){ return ""; } }
+  function fmtHM(hm){ var p=/^(\d{2}):(\d{2})$/.exec(hm||""); if (!p) return ""; return new Date(2000,0,1,+p[1],+p[2]).toLocaleTimeString(loc(),{hour:"numeric",minute:"2-digit"}); }
+  function newId(){ var c="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",a=new Uint8Array(20),s=""; crypto.getRandomValues(a); for (var k=0;k<20;k++) s+=c[a[k]%62]; return s; }
+  function plural(str,n){ var p=str.split("|"); return (n===1?p[0]:p[1]).replace("{n}",n); }
+
+  /* ---------- appointments ---------- */
+  function apptList(){ return Object.keys(appts).map(function(id){ var a=appts[id]; return Object.assign({id:id},a); }).sort(function(a,b){ return (a.date+(a.time||"99")).localeCompare(b.date+(b.time||"99")); }); }
+  function relDay(k){
+    var t=T[lang], d=parseKey(k), n=new Date(), today=new Date(n.getFullYear(),n.getMonth(),n.getDate());
+    var diff=Math.round((d-today)/86400000);
+    if (diff<0) return t.ago; if (diff===0) return t.today; if (diff===1) return t.tomorrow; return t.inDays.replace("{n}",diff);
+  }
+  function apptCard(a, past){
+    var t=T[lang], d=parseKey(a.date);
+    var meta=[a.time?fmtHM(a.time):"", a.place||""].filter(Boolean).join(" · ");
+    var badges=(a.fasting?'<span class="badge">'+esc(t.fasting)+'</span>':'')+(!a.time&&!past?'<span class="badge miss">'+esc(t.noTime)+'</span>':'');
+    return '<button type="button" class="appt'+(past?" past":"")+'" data-appt="'+esc(a.id)+'">'+
+      '<span class="cal"><span class="mo">'+esc(t.mon[d.getMonth()])+'</span><span class="dd">'+d.getDate()+'</span><span class="wd">'+esc(t.weekdays[d.getDay()])+'</span></span>'+
+      '<span><span class="tt">'+esc(a.title)+'</span>'+(meta?'<span class="meta" style="display:block">'+esc(meta)+'</span>':'')+
+      (past?'':'<span class="when" style="display:block">'+esc(relDay(a.date))+'</span>')+
+      (a.note?'<span class="nt" style="display:block">'+esc(a.note)+'</span>':'')+(badges?'<span style="display:block">'+badges+'</span>':'')+'</span></button>';
+  }
+  function renderAppts(){
+    var t=T[lang], tk=keyOfDate(new Date()), list=apptList();
+    var up=list.filter(function(a){ return a.date>=tk; }), past=list.filter(function(a){ return a.date<tk; }).reverse();
+    $("upcoming").innerHTML = up.length ? up.map(function(a){ return apptCard(a,false); }).join("") : '<p class="none">'+esc(t.noAppts)+'</p>';
+    $("pasttoggle").hidden = !past.length;
+    $("pasttoggle").textContent = showPast ? t.pastHide : t.pastShow+" ("+past.length+")";
+    $("pastlist").hidden = !showPast || !past.length;
+    var na=$("nextappt"), nx=up[0];
+    na.hidden=!nx;
+    if (nx){ var dd=parseKey(nx.date); na.innerHTML=CAL+"<span>"+esc(t.nextAppt)+": <b>"+esc(nx.title)+"</b> · "+esc(relDay(nx.date)+(relDay(nx.date)===t.today||relDay(nx.date)===t.tomorrow?"":" ("+t.weekdays[dd.getDay()]+" "+dd.getDate()+")"))+(nx.time?" · "+esc(fmtHM(nx.time)):"")+"</span>"; }
+    $("pastlist").innerHTML = showPast ? past.map(function(a){ return apptCard(a,true); }).join("") : "";
+  }
+  function openAppt(id){
+    var t=T[lang], a = id ? appts[id] : null;
+    editing = id || null; delArmed = false;
+    $("af-h").textContent = a ? t.editAppt : t.newAppt;
+    $("af-title-l").textContent=t.fTitle; $("af-title").placeholder=t.fTitlePh;
+    $("af-date-l").textContent=t.fDate;
+    $("af-time-l").innerHTML=esc(t.fTime)+' <span class="opt">'+esc(t.opt)+'</span>';
+    $("af-place-l").innerHTML=esc(t.fPlace)+' <span class="opt">'+esc(t.opt)+'</span>'; $("af-place").placeholder=t.fPlacePh;
+    $("af-note-l").innerHTML=esc(t.fNote)+' <span class="opt">'+esc(t.opt)+'</span>'; $("af-note").placeholder=t.fNotePh;
+    $("af-fast-l").textContent=t.fFast;
+    $("af-go").textContent=t.saveAppt; $("af-cancel").textContent=t.cancel;
+    $("af-del").textContent=t.del; $("af-del").hidden=!a;
+    $("af-title").value=a?a.title:""; $("af-date").value=a?a.date:key(cur); $("af-time").value=a?(a.time||""):"";
+    $("af-place").value=a?(a.place||""):""; $("af-note").value=a?(a.note||""):""; $("af-fast").checked=!!(a&&a.fasting);
+    $("af-err").hidden=true; validateAppt();
+    $("apptbg").hidden=false;
+    if (!a) setTimeout(function(){ $("af-title").focus(); },60);
+  }
+  function closeAppt(){ $("apptbg").hidden=true; editing=null; }
+  function validateAppt(){ $("af-go").disabled = !$("af-title").value.trim() || !/^\d{4}-\d{2}-\d{2}$/.test($("af-date").value); }
+  ["af-title","af-date"].forEach(function(x){ $(x).addEventListener("input",validateAppt); $(x).addEventListener("change",validateAppt); });
+  $("apptform").addEventListener("submit", function(e){
+    e.preventDefault(); validateAppt(); if ($("af-go").disabled) return;
+    var id = editing || newId();
+    var a = {date:$("af-date").value, time:$("af-time").value||"", title:$("af-title").value.trim().slice(0,80),
+             place:$("af-place").value.trim().slice(0,100), note:$("af-note").value.trim().slice(0,300), fasting:$("af-fast").checked, at:new Date().toISOString()};
+    var was = appts[id]; appts[id]=a; saveLocal(); renderAll();
+    if (mode==="live" && db){
+      $("af-go").disabled = true;
+      db.doc("ab_appts/"+id).set(a).then(closeAppt).catch(function(){
+        if (was) appts[id]=was; else delete appts[id]; renderAll();
+        $("af-err").textContent=T[lang].apptErr; $("af-err").hidden=false; $("af-go").disabled=false;
+      });
+    } else closeAppt();
+  });
+  $("af-del").onclick = function(){
+    if (!editing) return;
+    if (!delArmed){ delArmed=true; this.textContent=T[lang].delSure; return; }
+    var id=editing, was=appts[id]; delete appts[id]; saveLocal(); renderAll(); closeAppt();
+    if (mode==="live" && db) db.doc("ab_appts/"+id).delete().catch(function(){ appts[id]=was; renderAll(); showErr(T[lang].apptErr); });
+  };
+  $("af-cancel").onclick = closeAppt;
+  $("apptbg").addEventListener("click", function(e){ if (e.target===this) closeAppt(); });
+  $("addappt").onclick = function(){ openAppt(null); };
+  $("nextappt").onclick = function(){ document.querySelector(".appts").scrollIntoView({block:"start",behavior:"smooth"}); };
+  $("pasttoggle").onclick = function(){ showPast=!showPast; renderAppts(); };
+  document.addEventListener("click", function(e){ var b=e.target.closest("[data-appt]"); if (b) openAppt(b.dataset.appt); });
+
+  /* ---------- as-needed (Tramadol) ---------- */
+  function renderPrn(){
+    var t=T[lang], list=Object.keys(prn).map(function(id){ return {id:id, at:prn[id].at}; }).sort(function(a,b){ return b.at.localeCompare(a.at); });
+    var tk=keyOfDate(new Date()), todays=list.filter(function(x){ return keyOfDate(new Date(x.at))===tk; });
+    var h='<h2 id="prn-h">'+esc(t.prnH)+'</h2><p class="why" style="margin:-6px 0 0">'+esc(t.prnWhy)+'</p>';
+    if (list.length){
+      var l=new Date(list[0].at), isToday=keyOfDate(l)===tk;
+      h+='<div class="last">'+esc(t.prnLast)+': '+esc(isToday?t.today.toLowerCase():(t.weekdays[l.getDay()]+" "+l.getDate()+" "+t.mon[l.getMonth()]))+' · '+esc(fmtTime(list[0].at))+
+         (todays.length?' <span style="font-weight:500;color:var(--muted)">('+esc(t.prnToday)+': '+esc(plural(t.prnTimes,todays.length))+')</span>':'')+'</div>';
+      h+='<ul class="log">'+list.slice(0,5).map(function(x){
+        var d=new Date(x.at), lbl=(keyOfDate(d)===tk?t.today:(t.weekdays[d.getDay()]+" "+d.getDate()+" "+t.mon[d.getMonth()]))+" · "+fmtTime(x.at);
+        return '<li><span>'+esc(lbl)+'</span><button type="button" data-prn="'+esc(x.id)+'">'+esc(prnArmed===x.id?t.prnSure:t.prnRemove)+'</button></li>';
+      }).join("")+'</ul>';
+    } else h+='<p class="small">'+esc(t.prnNever)+'</p>';
+    h+='<button type="button" class="give" id="prn-give">'+esc(t.prnGive)+'</button><p class="small">'+esc(t.prnNote)+'</p>';
+    $("prn").innerHTML=h;
+  }
+  $("prn").addEventListener("click", function(e){
+    if (e.target.closest("#prn-give")){
+      var id=newId(), v={med:"tram", at:new Date().toISOString()};
+      prn[id]=v; saveLocal(); renderPrn();
+      if (mode==="live" && db) db.doc("ab_prn/"+id).set(v).catch(function(){ delete prn[id]; renderPrn(); showErr(T[lang].saveErr); });
+      return;
+    }
+    var b=e.target.closest("[data-prn]"); if (!b) return;
+    var pid=b.dataset.prn;
+    if (prnArmed!==pid){ prnArmed=pid; renderPrn(); setTimeout(function(){ if (prnArmed===pid){ prnArmed=null; renderPrn(); } },3000); return; }
+    prnArmed=null; var was=prn[pid]; delete prn[pid]; saveLocal(); renderPrn();
+    if (mode==="live" && db) db.doc("ab_prn/"+pid).delete().catch(function(){ prn[pid]=was; renderPrn(); });
+  });
+
+  /* ---------- daily medicines ---------- */
+  function renderStatic(){
+    var t=T[lang];
+    document.documentElement.lang=lang; document.title=t.h1;
+    $("h1").textContent=t.h1; $("sub").textContent=t.sub; $("todaybtn").textContent=t.goToday;
+    $("appts-h").textContent=t.appts; $("addappt-t").textContent=t.add;
+    $("prev").setAttribute("aria-label",t.prev); $("next").setAttribute("aria-label",t.next);
+    $("lang-en").setAttribute("aria-pressed",lang==="en"); $("lang-es").setAttribute("aria-pressed",lang==="es");
+    var el=$("sync"); el.dataset.state=mode; $("synctext").textContent=t[mode]||"";
+    renderRemind();
+  }
+  function apptDays(){ var s={}; Object.keys(appts).forEach(function(id){ s[appts[id].date]=1; }); return s; }
+  function renderStrip(){
+    var t=T[lang], h="", ad=apptDays();
+    for (var i=FIRST;i<=LAST;i++){
+      var d=dateOf(i), ids=idsFor(i), n=ids.filter(function(x){return checks[x];}).length;
+      h+='<button type="button" class="chip'+(i===ti?" today":"")+'" data-i="'+i+'"'+(i===cur?' aria-current="date"':'')+
+         ' aria-label="'+esc(t.longday[d.getDay()]+" "+d.getDate()+", "+n+"/"+ids.length)+'">'+(ad[key(i)]?'<span class="ap"></span>':'')+
+         '<span class="wd">'+esc(t.weekdays[d.getDay()])+'</span><span class="dn">'+d.getDate()+'</span><span class="bar"><b style="width:'+Math.round(n/ids.length*100)+'%"></b></span></button>';
+    }
+    var strip=$("strip"); strip.innerHTML=h;
+    var c=strip.querySelector('[aria-current="date"]'); if (c) strip.scrollLeft=c.offsetLeft-strip.clientWidth/2+c.clientWidth/2;
+  }
+  function slotState(sl){
+    var list=DAY[sl], done=list.filter(function(m){ return checks[doseId(cur,sl,m)]; }).length, t=T[lang];
+    if (done===list.length) return {cls:"",txt:t.done,left:0};
+    if (cur===ti){ var n=new Date(), mins=n.getHours()*60+n.getMinutes(); if (mins>=SLOT_MIN[sl]-30) return {cls:"due",txt:t.due+" · "+done+"/"+list.length,left:list.length-done}; }
+    return {cls:"",txt:done+"/"+list.length,left:list.length-done};
+  }
+  function renderDay(){
+    var t=T[lang], d=dateOf(cur), L=lang==="es"?0:1;
+    $("dlabel").textContent = lang==="es" ? (t.longday[d.getDay()]+" "+d.getDate()+" de "+t.months[d.getMonth()]) : (t.longday[d.getDay()]+", "+t.months[d.getMonth()].slice(0,3)+" "+d.getDate());
+    var ids=idsFor(cur), n=ids.filter(function(x){return checks[x];}).length;
+    $("dnote").textContent = n+" "+t.of+" "+ids.length+" "+t.gave;
+    $("prev").disabled = cur<=FIRST; $("next").disabled = cur>=LAST;
+    $("todaybtn").hidden = ti===cur || ti<0;
+
+    var k=key(cur), todays=apptList().filter(function(a){ return a.date===k; });
+    var ah=todays.map(function(a){ return apptCard(a, k<keyOfDate(new Date())); }).join("");
+    if (todays.some(function(a){ return a.fasting; })) ah+='<div class="notice">'+esc(t.fastNote)+'</div>';
+    $("dayappts").innerHTML=ah; $("dayappts").hidden=!ah;
+
+    var h="";
+    if (n===ids.length) h+='<div class="alldone"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7 12.5l3.2 3L17 8.5" stroke="var(--done-soft)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'+esc(t.alldone)+'</div>';
+    SLOTS.forEach(function(sl){
+      var st=slotState(sl);
+      h+='<section class="comp" id="comp-'+sl+'" style="--lid:var(--lid-'+sl+');--lid-ink:var(--lid-'+sl+'-ink)">'+
+         '<div class="lid"><div><div class="nm">'+esc(t.slots[sl])+'</div><div class="tm">'+esc(t.times[sl])+'</div></div><span class="st '+st.cls+'">'+esc(st.txt)+'</span>'+
+         (st.left>1?'<button type="button" class="all" data-all="'+sl+'">'+esc(t.all)+'</button>':'')+'</div><div class="rows">';
+      DAY[sl].forEach(function(m){
+        var M=MEDS[m], id=doseId(cur,sl,m), c=checks[id];
+        var fq=t.freq[M.f]+(M.f>1?" · "+nthOfDay(m,sl)+" "+t.of+" "+M.f:"");
+        var tags=(M.tags||[]).map(function(g){ return '<span class="tag">'+esc(t[g])+'</span>'; }).join("");
+        var foot = armed===id ? '<span class="undo">'+esc(t.undo)+'</span>' : (c&&c.at ? '<span class="given">'+esc(t.given+" "+fmtTime(c.at))+'</span>' : '');
+        h+='<button type="button" class="dose'+(armed===id?" arm":"")+'" role="checkbox" aria-checked="'+(c?"true":"false")+'" data-id="'+id+'">'+
+           '<span class="pill '+M.form+'" aria-hidden="true"></span>'+
+           '<span class="body"><span class="mn">'+esc(L?M.en:M.es)+'</span><span class="amt">'+esc(M.why[L])+'</span><span class="why">'+esc(fq)+'</span>'+
+           (tags?'<span class="tags">'+tags+'</span>':'')+foot+'</span><span class="check">'+CHECK+'</span></button>';
+      });
+      h+='</div></section>';
+    });
+    $("slots").innerHTML=h;
+  }
+  function renderAll(){ renderStatic(); renderAppts(); renderStrip(); renderDay(); renderPrn(); }
+
+  function scrollToDue(){
+    if (didScroll || cur!==ti || mode==="wait") return;
+    didScroll=true;
+    var due=document.querySelector(".lid .st.due");
+    if (due && window.scrollY<40){ var comps=document.querySelectorAll(".lid .st.due"); comps[comps.length-1].closest(".comp").scrollIntoView({block:"start",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"}); }
+  }
+  function showErr(msg){ $("err").textContent=msg; $("err").hidden=false; }
+
+  function setChecks(ids, on){
+    var was={}; ids.forEach(function(id){ was[id]=checks[id]; if (on) checks[id]={at:new Date().toISOString()}; else delete checks[id]; });
+    $("err").hidden=true; saveLocal(); renderStrip(); renderDay();
+    if (on && navigator.vibrate){ try { navigator.vibrate(12); } catch(e){} }
+    if (mode==="live" && db){
+      var b=db.batch();
+      ids.forEach(function(id){ var r=db.doc("ab_checks/"+id); if (on) b.set(r,{done:true,at:checks[id].at}); else b.delete(r); });
+      b.commit().catch(function(){
+        ids.forEach(function(id){ if (was[id]) checks[id]=was[id]; else delete checks[id]; });
+        showErr(T[lang].saveErr); renderStrip(); renderDay();
+      });
+    }
+  }
+  function tap(id){
+    if (!checks[id]){ armed=null; return setChecks([id],true); }
+    if (armed===id){ armed=null; clearTimeout(armTimer); return setChecks([id],false); }
+    armed=id; clearTimeout(armTimer); armTimer=setTimeout(function(){ armed=null; renderDay(); },3000); renderDay();
+  }
+  $("slots").addEventListener("click", function(e){
+    var a=e.target.closest("[data-all]");
+    if (a){ var sl=a.dataset.all; setChecks(DAY[sl].map(function(m){ return doseId(cur,sl,m); }).filter(function(id){ return !checks[id]; }), true); return; }
+    var b=e.target.closest(".dose"); if (b) tap(b.dataset.id);
+  });
+  $("strip").addEventListener("click", function(e){ var b=e.target.closest(".chip"); if (b){ cur=+b.dataset.i; armed=null; renderStrip(); renderDay(); } });
+  $("prev").onclick=function(){ if (cur>FIRST){ cur--; armed=null; renderStrip(); renderDay(); } };
+  $("next").onclick=function(){ if (cur<LAST){ cur++; armed=null; renderStrip(); renderDay(); } };
+  $("todaybtn").onclick=function(){ cur=Math.max(ti,0); renderStrip(); renderDay(); };
+  function setLang(l){ lang=l; try{ localStorage.setItem("abuela-lang",l); }catch(e){} renderAll(); refreshSub(); }
+  $("lang-en").onclick=function(){ setLang("en"); };
+  $("lang-es").onclick=function(){ setLang("es"); };
+  document.addEventListener("keydown", function(e){ if (e.key==="Escape"){ if (!$("apptbg").hidden) closeAppt(); $("iosbg").hidden=true; } });
+
+  var bar=$("daybar");
+  window.addEventListener("scroll", function(){ bar.classList.toggle("stuck", bar.getBoundingClientRect().top<=2 && window.scrollY>200); }, {passive:true});
+  setInterval(function(){ var t2=todayIndex(); if (t2!==ti){ ti=t2; LAST=Math.max(ti,0)+AHEAD; FIRST=Math.max(0,ti-14); renderAll(); } else renderDay(); }, 60000);
+
+  /* ---------- push reminders ---------- */
+  var VAPID_PUBLIC = "BKQVEh0lxhMPEtdNEKCAyMTkJsbpK2werjhhY9FJmJD9AYawPeApcr6IS1Rw60yRfLb_1CaDa7Ptenaeo23_dV4";
+  var pushState="unknown", swReg=null;
+  var BELL='<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  function isIOS(){ return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1); }
+  function isStandalone(){ return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone===true; }
+  function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+  function b64ToBytes(str){ var pad="=".repeat((4-str.length%4)%4), raw=atob((str+pad).replace(/-/g,"+").replace(/_/g,"/")), out=new Uint8Array(raw.length); for (var k=0;k<raw.length;k++) out[k]=raw.charCodeAt(k); return out; }
+  function subId(endpoint){ return crypto.subtle.digest("SHA-256",new TextEncoder().encode(endpoint)).then(function(h){ return Array.from(new Uint8Array(h)).map(function(x){ return x.toString(16).padStart(2,"0"); }).join("").slice(0,40); }); }
+  function saveSub(sub){
+    if (!db) return Promise.reject(new Error("offline"));
+    var j=sub.toJSON();
+    return subId(j.endpoint).then(function(id){
+      try { localStorage.setItem("abuela-sub",id); } catch(e){}
+      return db.doc("ab_subs/"+id).set({endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,name:"",lang:lang,at:new Date().toISOString()});
+    });
+  }
+  function currentSub(){ return swReg ? swReg.pushManager.getSubscription() : Promise.resolve(null); }
+  function refreshSub(){ currentSub().then(function(s){ if (s) saveSub(s).catch(function(){}); }); }
+  function renderRemind(){
+    var t=T[lang], el=$("remind");
+    if (pushState==="unknown"){ el.innerHTML=""; return; }
+    if (pushState==="unsupported"){ el.innerHTML='<div class="st">'+esc(t.remindNo)+'</div>'; return; }
+    if (pushState==="blocked"){ el.innerHTML='<div class="st">'+esc(t.remindBlocked)+'</div>'; return; }
+    if (pushState==="on"){ el.innerHTML='<div class="st"><b>'+BELL+esc(t.remindOn)+'</b> · <button type="button" id="rb-off">'+esc(t.remindTurnOff)+'</button></div>'; $("rb-off").onclick=disablePush; return; }
+    el.innerHTML='<button type="button" class="rb" id="rb-on"'+(pushState==="working"?" disabled":"")+'>'+BELL+esc(pushState==="working"?t.remindWorking:t.remindOff)+'</button>';
+    $("rb-on").onclick=enablePush;
+  }
+  function enablePush(){
+    var t=T[lang];
+    if (pushState==="ios-install"){
+      $("ios-h").textContent=t.iosH; $("ios-ok").textContent=t.iosOk;
+      $("ios-steps").innerHTML=t.iosSteps.map(function(x){ return "<li>"+esc(x)+"</li>"; }).join("");
+      $("iosbg").hidden=false; return;
+    }
+    pushState="working"; renderRemind();
+    Notification.requestPermission().then(function(perm){
+      if (perm!=="granted"){ pushState=perm==="denied"?"blocked":"off"; renderRemind(); return; }
+      return navigator.serviceWorker.ready.then(function(reg){ swReg=reg; return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToBytes(VAPID_PUBLIC)}); })
+        .then(saveSub).then(function(){ pushState="on"; renderRemind(); });
+    }).catch(function(){ pushState="off"; renderRemind(); showErr(T[lang].remindFail); });
+  }
+  function disablePush(){
+    var id=null; try { id=localStorage.getItem("abuela-sub"); } catch(e){}
+    if (id && db) db.doc("ab_subs/"+id).delete().catch(function(){});
+    currentSub().then(function(s){ return s && s.unsubscribe(); }).then(function(){ pushState="off"; renderRemind(); });
+  }
+  function goToDay(k){ var i=indexOfKey(k); if (isNaN(i)||i<FIRST||i>LAST) return; cur=i; armed=null; renderStrip(); renderDay(); }
+  function initPush(){
+    if (!pushSupported()){ pushState=(isIOS()&&!isStandalone())?"ios-install":"unsupported"; renderRemind(); return; }
+    navigator.serviceWorker.addEventListener("message", function(e){ if (e.data && e.data.day) goToDay(e.data.day); });
+    navigator.serviceWorker.register("/sw.js").then(function(reg){ swReg=reg; return reg.pushManager.getSubscription(); }).then(function(sub){
+      pushState=Notification.permission==="denied"?"blocked":(sub?"on":"off"); renderRemind();
+      if (sub) saveSub(sub).catch(function(){});
+    }).catch(function(){ pushState="unsupported"; renderRemind(); });
+  }
+  $("ios-ok").onclick=function(){ $("iosbg").hidden=true; };
+  $("iosbg").addEventListener("click", function(e){ if (e.target===this) this.hidden=true; });
+
+  /* ---------- start ---------- */
+  loadLocal(); renderAll();
+  try { goToDay(new URLSearchParams(location.search).get("day")); } catch(e){}
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+    var pending={checks:1,appts:1,prn:1};
+    var timer=setTimeout(function(){ if (mode==="wait"){ mode="fail"; db=null; renderAll(); } },10000);
+    function ready(part){ delete pending[part]; if (!Object.keys(pending).length){ clearTimeout(timer); mode="live"; } saveLocal(); renderAll(); scrollToDue(); }
+    function failed(){ clearTimeout(timer); db=null; mode="fail"; renderAll(); }
+    db.collection("ab_checks").where(firebase.firestore.FieldPath.documentId(), ">=", key(FIRST)).onSnapshot(function(snap){
+      var next={}; snap.docs.forEach(function(doc){ var v=doc.data(); if (v&&v.done) next[doc.id]={at:v.at}; }); checks=next; ready("checks");
+    }, failed);
+    db.collection("ab_appts").onSnapshot(function(snap){
+      var next={}; snap.docs.forEach(function(doc){ next[doc.id]=doc.data(); }); appts=next; ready("appts");
+    }, failed);
+    db.collection("ab_prn").where("at", ">=", new Date(Date.now()-30*86400000).toISOString()).onSnapshot(function(snap){
+      var next={}; snap.docs.forEach(function(doc){ next[doc.id]=doc.data(); }); prn=next; ready("prn");
+    }, failed);
+  } catch(e){ mode="local"; renderAll(); }
+  initPush();
+})();
+</script>
+</body>
+</html>
